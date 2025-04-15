@@ -21,15 +21,17 @@ data = []
 
 dataframe = pd.DataFrame(columns=['vhash', 'scan_date', 'first_seen', 'submission_date', 'children', 'sha256', 'scans', 'permalink','submission'])
 
+# Connect to MongoDB
+client = MongoClient(MONGO_URI)
+db = client[DATABASE_NAME]
+collection = db[COLLECTION_NAME]  # New collection for dataframe
+
 for filename in os.listdir(directory):
     if filename.endswith(".json"):
         with open(os.path.join(directory, filename), 'r') as f:
             data.append(json.load(f))
 
-            # Connect to MongoDB
-            client = MongoClient(MONGO_URI)
-            db = client[DATABASE_NAME]
-            collection = db[COLLECTION_NAME]  # New collection for dataframe
+            
 
             ## For dataframe
             vhash = data[-1].get('vhash', None)
