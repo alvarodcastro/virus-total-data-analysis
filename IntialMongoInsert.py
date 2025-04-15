@@ -16,7 +16,7 @@ COLLECTION_NAME = os.getenv('COLLECTION_NAME')
 if not MONGO_URI or not DATABASE_NAME or not COLLECTION_NAME:
     raise ValueError("Missing MongoDB connection string or database/collection name in environment variables.")
 
-directory = "../VTAndroid/"
+directory = "./VTAndroid"
 data = []
 
 dataframe = pd.DataFrame(columns=['vhash', 'scan_date', 'first_seen', 'submission_date', 'children', 'sha256', 'scans', 'permalink','submission'])
@@ -30,9 +30,7 @@ for filename in os.listdir(directory):
     if filename.endswith(".json"):
         with open(os.path.join(directory, filename), 'r') as f:
             data.append(json.load(f))
-
             
-
             ## For dataframe
             vhash = data[-1].get('vhash', None)
             scan_date = data[-1].get('scan_date', None)
@@ -57,6 +55,3 @@ for filename in os.listdir(directory):
                 'submission': submission
             }
             collection.insert_one(document)
-
-            
-
