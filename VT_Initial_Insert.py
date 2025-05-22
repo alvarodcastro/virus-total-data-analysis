@@ -55,6 +55,7 @@ for filename in os.listdir(directory):
                 'total': total,
                 'sha256': sha256,
                 'scans': scans,
+                'tags': tags,
                 'positives': positives,
                 'permalink': permalink,
                 'submission': submission,
