@@ -19,6 +19,9 @@ MONGO_URI = os.getenv('MONGO_URI')
 DATABASE_NAME = os.getenv('DATABASE_NAME')
 COLLECTION_NAME = os.getenv('COLLECTION_NAME')
 
+# Ruta para guardar los resultados
+RESULTS_DIR = os.getenv('RESULTS_DIR', './results')
+
 if not MONGO_URI or not DATABASE_NAME or not COLLECTION_NAME:
     raise ValueError("Missing MongoDB connection string or database/collection name in environment variables.")
 
@@ -91,7 +94,7 @@ choropleth = folium.Choropleth(
 ).add_to(world_map)
 
 folium.LayerControl().add_to(world_map)
-world_map.save("mapa_muestras_por_pais.html")
+world_map.save(RESULTS_DIR + "/mapa_muestras_por_pais.html")
 print("Mapa guardado en: mapa_muestras_por_pais.html")
 
 # 4. Crear gráfico de barras
@@ -102,11 +105,11 @@ plt.ylabel('Número de muestras')
 plt.title('Número de muestras por país')
 plt.xticks(rotation=45)
 plt.tight_layout()
-plt.savefig("muestras_por_pais.png")
+plt.savefig(RESULTS_DIR + "/muestras_por_pais.png")
 # plt.show()
 
 # GUardar los resultados en un archivo CSV
-df.to_csv("muestras_por_pais.csv", index=False)
+df.to_csv(RESULTS_DIR + "/muestras_por_pais.csv", index=False)
 
 # ======= ANÁLISIS 2: Muestras más detectadas =======
 print("\nANALISIS 2:  Muestras más detectadas")
@@ -141,7 +144,7 @@ for result in collection.aggregate(agg_top_muestras):
 
 # Guardar los resultados en un archivo CSV
 df_top_muestras = pd.DataFrame(list(collection.aggregate(agg_top_muestras)))
-df_top_muestras.to_csv("top_muestras.csv", index=False)
+df_top_muestras.to_csv(RESULTS_DIR + "/top_muestras.csv", index=False)
 
 # ======= ANÁLISIS 3: Detección media por motor de análisis =======
 print("\nANALISIS 3: Detección media por motor de análisis")
@@ -186,7 +189,7 @@ for result in collection.aggregate(agg_por_motor):
 
 # Guardar los resultados en un archivo CSV
 df_por_motor = pd.DataFrame(list(collection.aggregate(agg_por_motor)))
-df_por_motor.to_csv("detecciones_por_motor.csv", index=False)
+df_por_motor.to_csv(RESULTS_DIR + "/detecciones_por_motor.csv", index=False)
 
 # ======= ANÁLISIS 4: Muestras más peligrosas =======
 print("\nANALISIS 4: Muestras más peligrosas")
@@ -230,6 +233,10 @@ tabla = [
 # Mostrar resultados
 for fila in tabla:
     print(f"SHA256: {fila['SHA256']}, Detecciones: {fila['Detecciones']:<10}, Total AV: {fila['Total AV']:<10}, Ratio: {fila['Ratio']}")
+
+# Guardar los resultados en un archivo CSV
+df_top_peligrosas = pd.DataFrame(tabla)
+df_top_peligrosas.to_csv(RESULTS_DIR + "/top_muestras_peligrosas.csv", index=False)
 
 # ANÁLISIS 5:
 print("\nANALISIS 5: Muestras con más hijos")
@@ -276,10 +283,12 @@ agg_children_por_muestra = [
     {"$limit": 30}  # Limitar a las 20 muestras con más hijos
 ]
 
+# Guardar los resultados en un archivo CSV
 fase1_results = list(collection.aggregate(agg_children_por_muestra))
-df_fase1 = pd.DataFrame(fase1_results)
-df_fase1.to_csv("fase1_children_por_muestra.csv", index=False)
+df_fase1 = pd.DataFrame(fase1_results)  
+df_fase1.to_csv(RESULTS_DIR + "/children_por_muestra.csv", index=False)
 
+# Mostrar resultados
 for result in fase1_results:
     print(f"SHA256: {result['sha256']}, Nº hijos: {result['num_children']}, Hijos por tipo: {result['children_types']}")
 
@@ -308,9 +317,79 @@ agg_relaciones_children = [
 
 fase2_results = list(collection.aggregate(agg_relaciones_children))
 df_fase2 = pd.DataFrame(fase2_results)
-df_fase2.to_csv("fase2_children_compartidos.csv", index=False)
+df_fase2.to_csv(RESULTS_DIR + "/children_compartidos.csv", index=False)
 
 for result in fase2_results:
     short_sha = result['_id'][:10] + "..." if result['_id'] else ""
     short_muestras = [m[:10] + "..." for m in result['muestras_relacionadas']]
     print(f"SHA256 child: {short_sha}, Número de muestras relacionadas: {result['num_muestras']}")#, Muestras relacionadas: {short_muestras}")
+
+# ==== Análisis 7: Distribución de TAGS ====
+print("\nANALISIS 7: Distribución de TAGS")
+# Este análisis calcula la cantidad de muestras por cada tag y la detección media asociada a cada uno.
+agg_tags = [
+    {"$match": {"tags": {"$exists": True, "$ne": []}}},
+    {"$unwind": "$tags"},
+    {"$group": {
+        "_id": "$tags",
+        "num_muestras": {"$sum": 1},
+        "deteccion_media": {"$avg": {"$divide": ["$positives", "$total"]}}
+    }},
+    {"$sort": {"num_muestras": -1}}
+]
+
+tags_result = list(collection.aggregate(agg_tags))
+df_tags = pd.DataFrame(tags_result)
+df_tags.to_csv(RESULTS_DIR + "/analisis_tags.csv", index=False)
+
+for result in tags_result:
+    print(f"TAG: {result['_id']:<20}, Número de muestras: {result['num_muestras']:<20}, Detección media: {result['deteccion_media']}")
+
+# ==== Análisis 8: Evolución temporal de muestras ====
+print("\nANALISIS 8: Evolución temporal de muestras")
+# Este análisis calcula la evolución temporal de las muestras, agrupando por fecha de envío y contando el número de muestras por día.
+agg_evolucion = [
+    {"$match": {"submission.date": {"$exists": True, "type": "date"}}},
+
+    {"$project": {
+        "fecha_date": {
+            "$dateFromString": {
+                "dateString": "$submission.date",
+                "format": "%Y-%m-%dT%H:%M:%S" 
+            }
+        }
+    }},
+    {"$group": {
+        "_id": "$fecha",
+        "num_muestras": {"$sum": 1}
+    }},
+    {"$sort": {"_id": 1}}
+]
+
+# evolucion_result = list(collection.aggregate(agg_evolucion))
+# df_evolucion = pd.DataFrame(evolucion_result)
+# df_evolucion.to_csv("evolucion_muestras.csv", index=False)
+
+# for result in evolucion_result:
+#     print(f"Fecha: {result['_id']}, Número de muestras: {result['num_muestras']}")
+
+# print(" Exportados como 'analisis_tags.csv' y 'evolucion_muestras.csv'")
+
+
+print("\nANALISIS 9: Muestras ordenadas por hora de envío")
+# Este análisis agrupa las muestras por hora de envío y las ordena cronológicamente.
+agg_por_hora = [
+    {"$match": {"submission.date": {"$exists": True}}},
+    {"$project": {
+        "sha256": 1,
+        "hora": {"$hour": "$submission.date"}
+    }},
+    {"$sort": {"hora": 1}}
+]
+
+# por_hora_result = list(collection.aggregate(agg_por_hora))
+# df_por_hora = pd.DataFrame(por_hora_result)
+# df_por_hora.to_csv("muestras_por_hora.csv", index=False)
+
+# for result in por_hora_result:
+#     print(f"SHA256: {result['sha256']}, Hora de envío: {result['hora']}")
