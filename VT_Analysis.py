@@ -94,8 +94,24 @@ folium.LayerControl().add_to(world_map)
 world_map.save("mapa_muestras_por_pais.html")
 print("Mapa guardado en: mapa_muestras_por_pais.html")
 
-# ======= ANÁLISIS 2: Detección media por antivirus =======
-print("\nANALISIS 2: Detección media por antivirus")
+# 4. Crear gráfico de barras
+plt.figure(figsize=(12, 6))
+plt.bar(df['country'], df['count'], color='skyblue')
+plt.xlabel('País')
+plt.ylabel('Número de muestras')
+plt.title('Número de muestras por país')
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.savefig("muestras_por_pais.png")
+# plt.show()
+
+# GUardar los resultados en un archivo CSV
+df.to_csv("muestras_por_pais.csv", index=False)
+
+# ======= ANÁLISIS 2: Muestras más detectadas =======
+print("\nANALISIS 2:  Muestras más detectadas")
+# Este análisis identifica las 10 muestras con más detecciones absolutas (positives), es decir, aquellas que más motores antivirus clasificaron como maliciosas.
+
 # 1. $project: crea un nuevo documento para cada entrada, seleccionando y calculando campos específicos:
 # "sha256": 1 Incluye el campo sha256 en la salida.
 # "positives": 1 Incluye el campo positives (probablemente el número de detecciones positivas).
@@ -123,8 +139,14 @@ agg_top_muestras = [
 for result in collection.aggregate(agg_top_muestras):
     print(f"SHA256: {result['sha256']}, Positives: {result['positives']}, Total: {result['total']}, Ratio: {result['ratio']}")
 
+# Guardar los resultados en un archivo CSV
+df_top_muestras = pd.DataFrame(list(collection.aggregate(agg_top_muestras)))
+df_top_muestras.to_csv("top_muestras.csv", index=False)
+
 # ======= ANÁLISIS 3: Detección media por motor de análisis =======
 print("\nANALISIS 3: Detección media por motor de análisis")
+# Este análisis calcula la tasa de detección media de cada motor antivirus, indicando cuáles tienen mayor eficacia relativa.
+
 # 1. $project: crea un nuevo documento para cada entrada, seleccionando y calculando campos específicos:
 # "scans": 1 Incluye el campo scans en la salida.
 # 2. $project: convierte el campo scans (que es un objeto) en un array de pares clave-valor, donde cada par representa un motor de análisis y su resultado.
@@ -161,4 +183,134 @@ agg_por_motor = [
 # Resultado: Un documento por cada motor de análisis, mostrando el número de detecciones y el total de escaneos realizados por ese motor.
 for result in collection.aggregate(agg_por_motor):
     print(f"Motor: {result['_id']:<25}, Detecciones: {result['detecciones']:<15}, Total escaneos: {result['total_escaneos']:<15}, Ratio: {result['ratio']:.4f}")
-    
+
+# Guardar los resultados en un archivo CSV
+df_por_motor = pd.DataFrame(list(collection.aggregate(agg_por_motor)))
+df_por_motor.to_csv("detecciones_por_motor.csv", index=False)
+
+# ======= ANÁLISIS 4: Muestras más peligrosas =======
+print("\nANALISIS 4: Muestras más peligrosas")
+# 1. $match: Filtra los documentos para incluir solo aquellos donde el campo total es mayor que 0.
+# 2. $project: crea un nuevo documento para cada entrada, seleccionando y calculando campos específicos:
+# "sha256": 1 Incluye el campo sha256 en la salida.
+# "positives": 1 Incluye el campo positives (probablemente el número de detecciones positivas).
+# "total": 1 Incluye el campo total (posiblemente el total de motores de análisis).
+# "detection_rate": {"$divide": ["$positives", "$total"]} Crea un nuevo campo llamado detection_rate que es el resultado de dividir positives entre total (proporción de positivos respecto al total).
+# 3. $sort: ordena los documentos resultantes de mayor a menor según el campo detection_rate.
+# {"detection_rate": -1} Ordena los documentos resultantes de mayor a menor según el campo detection_rate. Así, los archivos con más detecciones positivas respecto al total aparecen primero.  
+# 4. $limit: {"$limit": 15} Limita la salida a solo los 15 primeros documentos, es decir, los 15 archivos con más detecciones positivas respecto al total.
+
+agg_top_peligrosas = [
+    {"$match": {"total": {"$gt": 0}}},
+    {"$project": {
+        "sha256": 1,
+        "positives": 1,
+        "total": 1,
+        "detection_rate": {"$divide": ["$positives", "$total"]}
+    }},
+    {"$sort": {"detection_rate": -1}},
+    # {"$limit": 15}
+]
+
+# Ejecutar la consulta
+top_peligrosas = list(collection.aggregate(agg_top_peligrosas))
+
+# Formatear resultados
+tabla = [
+    {
+        "SHA256": doc["sha256"][:10] + "...",  # acortado para que no desborde
+        "Detecciones": doc["positives"],
+        "Total AV": doc["total"],
+        "Ratio": round(doc["detection_rate"], 4)
+    }
+    for doc in top_peligrosas
+]
+# Resultado: Selecciona los 15 archivos con más detecciones positivas respecto al total, mostrando su hash (sha256), el número de positivos, el total de motores y la proporción de positivos respecto al total.
+
+# Mostrar resultados
+for fila in tabla:
+    print(f"SHA256: {fila['SHA256']}, Detecciones: {fila['Detecciones']:<10}, Total AV: {fila['Total AV']:<10}, Ratio: {fila['Ratio']}")
+
+# ANÁLISIS 5:
+print("\nANALISIS 5: Muestras con más hijos")
+# Agregación MongoDB para contar y clasificar los children por tipo
+agg_children_por_muestra = [
+    {
+        "$match": {
+            "children": {"$type": "array"}
+        }
+    },
+    {
+        "$project": {
+            "sha256": 1,
+            "num_children": {"$size": "$children"},
+            "children_types": {
+                "$arrayToObject": {
+                    "$map": {
+                        "input": {"$setUnion": [{"$map": {
+                            "input": "$children",
+                            "as": "child",
+                            "in": "$$child.type"
+                        }}]},
+                        "as": "tipo",
+                        "in": {
+                            "k": "$$tipo",
+                            "v": {
+                                "$size": {
+                                    "$filter": {
+                                        "input": "$children",
+                                        "as": "c",
+                                        "cond": {"$eq": ["$$c.type", "$$tipo"]}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    {
+        "$sort": {"num_children": -1}
+    },
+    {"$limit": 30}  # Limitar a las 20 muestras con más hijos
+]
+
+fase1_results = list(collection.aggregate(agg_children_por_muestra))
+df_fase1 = pd.DataFrame(fase1_results)
+df_fase1.to_csv("fase1_children_por_muestra.csv", index=False)
+
+for result in fase1_results:
+    print(f"SHA256: {result['sha256']}, Nº hijos: {result['num_children']}, Hijos por tipo: {result['children_types']}")
+
+
+# ANÁLISIS 6: Muestras con hijos compartidos
+print("\nANALISIS 6: Muestras con hijos compartidos")
+# Fase 2: Agrupar por tipo de children y contar las muestras relacionadas
+agg_relaciones_children = [
+    {"$match": {"children": {"$type": "array"}}},
+    {"$unwind": "$children"},
+    {"$group": {
+        "_id": "$children.sha256",
+        "filename": {"$first": "$children.filename"},  # Opcional, informativo
+        "muestras_relacionadas": {"$addToSet": "$sha256"}
+    }},
+    {"$project": {
+        "filename": 1,
+        "num_muestras": {"$size": "$muestras_relacionadas"},
+        "muestras_relacionadas": 1
+    }},
+    {"$match": {"num_muestras": {"$gt": 1}}},
+    {"$sort": {"num_muestras": -1}},
+    {"$limit": 30}
+]
+
+
+fase2_results = list(collection.aggregate(agg_relaciones_children))
+df_fase2 = pd.DataFrame(fase2_results)
+df_fase2.to_csv("fase2_children_compartidos.csv", index=False)
+
+for result in fase2_results:
+    short_sha = result['_id'][:10] + "..." if result['_id'] else ""
+    short_muestras = [m[:10] + "..." for m in result['muestras_relacionadas']]
+    print(f"SHA256 child: {short_sha}, Número de muestras relacionadas: {result['num_muestras']}")#, Muestras relacionadas: {short_muestras}")

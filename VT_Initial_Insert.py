@@ -19,14 +19,12 @@ if not MONGO_URI or not DATABASE_NAME or not COLLECTION_NAME:
 directory = "./VTAndroid"
 data = []
 
-dataframe = pd.DataFrame(columns=['vhash', 'scan_date', 'first_seen', 'submission_date', 'children', 'total', 'sha256', 'scans', 'positives', 'permalink', 'submission', 'last_seen'])
+dataframe = pd.DataFrame(columns=['vhash', 'scan_date', 'first_seen', 'submission_date', 'children', 'total', 'sha256', 'scans', 'tags' ,'positives', 'permalink', 'submission', 'last_seen'])
 
 # Connect to MongoDB
 client = MongoClient(MONGO_URI)
 db = client[DATABASE_NAME]
 collection = db[COLLECTION_NAME]  # New collection for dataframe
-
-documents = []
 
 for filename in os.listdir(directory):
     if filename.endswith(".json"):
@@ -42,6 +40,7 @@ for filename in os.listdir(directory):
             total = data[-1].get('total', None)
             sha256 = data[-1].get('sha256', None)
             scans = data[-1].get('scans', None)  # Store scans as JSON string
+            tags = data[-1].get('tags', None)
             positives = data[-1].get('positives', None)
             permalink = data[-1].get('permalink', None)
             submission = data[-1].get('submission', None)  # Store submission as JSON string
@@ -61,9 +60,9 @@ for filename in os.listdir(directory):
                 'submission': submission,
                 'last_seen': last_seen
             }
-            document.append(document)
-        # Insert the document into MongoDB
-        collection.insert_many(documents)
+        
+            # Insert the document into MongoDB
+            collection.insert_one(document)
 
 print("Data inserted into MongoDB successfully.")
 
