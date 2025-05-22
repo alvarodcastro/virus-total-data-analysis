@@ -4,7 +4,7 @@ from datetime import datetime
 import os
 from pymongo import MongoClient
 from dotenv import load_dotenv
-import matplotlib.pyplot as plt
+
 # Load environment variables from a .env file
 load_dotenv()
 
@@ -19,12 +19,14 @@ if not MONGO_URI or not DATABASE_NAME or not COLLECTION_NAME:
 directory = "./VTAndroid"
 data = []
 
-dataframe = pd.DataFrame(columns=['vhash', 'scan_date', 'first_seen', 'submission_date', 'children', 'sha256', 'scans', 'permalink','submission'])
+dataframe = pd.DataFrame(columns=['vhash', 'scan_date', 'first_seen', 'submission_date', 'children', 'total', 'sha256', 'scans', 'positives', 'permalink', 'submission', 'last_seen'])
 
 # Connect to MongoDB
 client = MongoClient(MONGO_URI)
 db = client[DATABASE_NAME]
 collection = db[COLLECTION_NAME]  # New collection for dataframe
+
+documents = []
 
 for filename in os.listdir(directory):
     if filename.endswith(".json"):
@@ -37,11 +39,13 @@ for filename in os.listdir(directory):
             first_seen = data[-1].get('first_seen', None)
             submission_date = data[-1].get('submission', {}).get('date', None)
             children = data[-1].get('additional_info', {}).get('compressedview', {}).get('children', None)
+            total = data[-1].get('total', None)
             sha256 = data[-1].get('sha256', None)
             scans = data[-1].get('scans', None)  # Store scans as JSON string
+            positives = data[-1].get('positives', None)
             permalink = data[-1].get('permalink', None)
             submission = data[-1].get('submission', None)  # Store submission as JSON string
-
+            last_seen = data[-1].get('last_seen', None)
             # Insert the row into MongoDB
             document = {
                 'vhash': vhash,
@@ -49,9 +53,19 @@ for filename in os.listdir(directory):
                 'first_seen': first_seen,
                 'submission_date': submission_date,
                 'children': children,
+                'total': total,
                 'sha256': sha256,
                 'scans': scans,
+                'positives': positives,
                 'permalink': permalink,
-                'submission': submission
+                'submission': submission,
+                'last_seen': last_seen
             }
-            collection.insert_one(document)
+            document.append(document)
+        # Insert the document into MongoDB
+        collection.insert_many(documents)
+
+print("Data inserted into MongoDB successfully.")
+
+# Close the MongoDB connection
+#client.close()
