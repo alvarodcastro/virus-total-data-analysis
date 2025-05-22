@@ -349,14 +349,11 @@ for result in tags_result:
 print("\nANALISIS 8: Evolución temporal de muestras")
 # Este análisis calcula la evolución temporal de las muestras, agrupando por fecha de envío y contando el número de muestras por día.
 agg_evolucion = [
-    {"$match": {"submission.date": {"$exists": True, "type": "date"}}},
+    {"$match": {"submission.date": {"$exists": True}}},
 
     {"$project": {
-        "fecha_date": {
-            "$dateFromString": {
-                "dateString": "$submission.date",
-                "format": "%Y-%m-%dT%H:%M:%S" 
-            }
+        "fecha": {
+                "$substr": ["$submission.date", 0, 10]  # Extrae 'YYYY-MM-DD'
         }
     }},
     {"$group": {
@@ -366,14 +363,13 @@ agg_evolucion = [
     {"$sort": {"_id": 1}}
 ]
 
-# evolucion_result = list(collection.aggregate(agg_evolucion))
-# df_evolucion = pd.DataFrame(evolucion_result)
-# df_evolucion.to_csv("evolucion_muestras.csv", index=False)
+evolucion_result = list(collection.aggregate(agg_evolucion))
+df_evolucion = pd.DataFrame(evolucion_result)
+df_evolucion.to_csv(RESULTS_DIR + "/evolucion_muestras.csv", index=False)
+# 
+for result in evolucion_result:
+    print(f"Fecha: {result['_id']}, Número de muestras: {result['num_muestras']}")
 
-# for result in evolucion_result:
-#     print(f"Fecha: {result['_id']}, Número de muestras: {result['num_muestras']}")
-
-# print(" Exportados como 'analisis_tags.csv' y 'evolucion_muestras.csv'")
 
 
 print("\nANALISIS 9: Muestras ordenadas por hora de envío")
@@ -382,14 +378,80 @@ agg_por_hora = [
     {"$match": {"submission.date": {"$exists": True}}},
     {"$project": {
         "sha256": 1,
-        "hora": {"$hour": "$submission.date"}
-    }},
-    {"$sort": {"hora": 1}}
+        "hora_envio": "$submission.date"  # Guarda la fecha/hora en un campo llamado 'hora_envio'
+        }
+    },
+    {"$sort": {"hora_envio": 1}}
 ]
 
-# por_hora_result = list(collection.aggregate(agg_por_hora))
-# df_por_hora = pd.DataFrame(por_hora_result)
-# df_por_hora.to_csv("muestras_por_hora.csv", index=False)
+por_hora_result = list(collection.aggregate(agg_por_hora))
+df_por_hora = pd.DataFrame(por_hora_result)
+df_por_hora.to_csv(RESULTS_DIR + "/muestras_por_hora.csv", index=False)
 
-# for result in por_hora_result:
-#     print(f"SHA256: {result['sha256']}, Hora de envío: {result['hora']}")
+print("\nFechas de 'submission.date' de todos los documentos:")
+
+for result in por_hora_result:
+    print(f"SHA256: {result['sha256']}, Hora de envío: {result['hora_envio']}")
+
+    
+import folium
+import pycountry
+from geopy.geocoders import Nominatim
+from time import sleep
+
+# === Tu DataFrame 'df' ya debe contener:
+# 'country_code', 'country', 'count', 'avg_detection'
+
+# Diccionario aproximado de coordenadas por país (puedes ampliarlo si necesitas más)
+coords_dict = {
+    'Canada': (56.1304, -106.3468),
+    'Germany': (51.1657, 10.4515),
+    'United States': (37.0902, -95.7129),
+    'Czechia': (49.8175, 15.4730),
+    'Korea, Republic of': (35.9078, 127.7669),
+    'India': (20.5937, 78.9629),
+    'Ireland': (53.4129, -8.2439),
+    'Ecuador': (-1.8312, -78.1834),
+    'Russian Federation': (61.5240, 105.3188),
+    'Argentina': (-38.4161, -63.6167),
+    # Añade más si lo deseas
+}
+
+# Crear el mapa base
+world_map = folium.Map(location=[20, 0], zoom_start=2)
+
+# Choropleth coloreado por detección media
+choropleth = folium.Choropleth(
+    geo_data='https://raw.githubusercontent.com/python-visualization/folium/main/examples/data/world-countries.json',
+    name='Detección media por país',
+    data=df,
+    columns=['country', 'avg_detection'],
+    key_on='feature.properties.name',
+    fill_color='YlGnBu',
+    fill_opacity=0.7,
+    line_opacity=0.2,
+    legend_name='Detección media',
+).add_to(world_map)
+
+# Añadir etiquetas en cada país
+for idx, row in df.iterrows():
+    country = row['country']
+    if country in coords_dict:
+        lat, lon = coords_dict[country]
+        folium.CircleMarker(
+            location=[lat, lon],
+            radius=5,
+            color='black',
+            fill=True,
+            fill_color='blue',
+            fill_opacity=0.6,
+            popup=folium.Popup(
+                f"<b>{country}</b><br>Muestras: {row['count']}<br>Media detección: {round(row['avg_detection'], 2)}",
+                max_width=200
+            )
+        ).add_to(world_map)
+
+# Guardar el resultado
+RESULTS_DIR = './results'
+world_map.save(RESULTS_DIR + "/mapa_muestras_con_info.html")
+print("✅ Mapa generado: mapa_muestras_con_info.html")
