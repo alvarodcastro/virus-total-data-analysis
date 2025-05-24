@@ -10,6 +10,9 @@ from shapely.geometry import Point
 import folium
 import pycountry
 import numpy as np
+from geopy.geocoders import Nominatim
+from time import sleep
+
 
 # Load environment variables from a .env file
 load_dotenv()
@@ -108,8 +111,39 @@ plt.tight_layout()
 plt.savefig(RESULTS_DIR + "/muestras_por_pais.png")
 # plt.show()
 
-# GUardar los resultados en un archivo CSV
+# Guardar los resultados en un archivo CSV
 df.to_csv(RESULTS_DIR + "/muestras_por_pais.csv", index=False)
+
+results = list(collection.aggregate(agg_pais_detection))
+df2 = pd.DataFrame(results)
+df2.columns = ['country_code', 'count', 'avg_detection']
+
+df2['country'] = df2['country_code'].apply(code_to_country_name)
+df2 = df2.dropna(subset=['country'])
+
+# Añadir columna de porcentaje respecto al total
+df2['percentage'] = df2['count'] / df2['count'].sum() * 100
+
+# Ordenar y agrupar los menores como "Others"
+df_sorted = df2.sort_values(by='percentage', ascending=False)
+top_n = 10
+df_top = df_sorted.iloc[:top_n].copy()
+otros = pd.DataFrame({
+    'country': ['Others'],
+    'count': [df_sorted.iloc[top_n:]['count'].sum()],
+    'percentage': [df_sorted.iloc[top_n:]['percentage'].sum()]
+})
+df_pie = pd.concat([df_top, otros], ignore_index=True)
+
+# Crear gráfico de tarta
+plt.figure(figsize=(8, 8))
+plt.pie(df_pie['percentage'], labels=df_pie['country'], autopct='%1.1f%%', startangle=140)
+plt.title('Distribución porcentual de muestras por país')
+plt.tight_layout()
+plt.savefig(RESULTS_DIR + "/muestras_por_pais_piechart.png")
+plt.close()
+
+
 
 # ======= ANÁLISIS 2: Muestras más detectadas =======
 print("\nANALISIS 2:  Muestras más detectadas")
@@ -212,7 +246,7 @@ agg_top_peligrosas = [
         "detection_rate": {"$divide": ["$positives", "$total"]}
     }},
     {"$sort": {"detection_rate": -1}},
-    # {"$limit": 15}
+    {"$limit": 15}
 ]
 
 # Ejecutar la consulta
@@ -352,24 +386,79 @@ agg_evolucion = [
     {"$match": {"submission.date": {"$exists": True}}},
 
     {"$project": {
-        "fecha": {
-                "$substr": ["$submission.date", 0, 10]  # Extrae 'YYYY-MM-DD'
+        "hora": {
+                "$substr": ["$submission.date", 0, 13]  # Extrae 'YYYY-MM-DD'
         }
     }},
     {"$group": {
-        "_id": "$fecha",
+        "_id": "$hora",
         "num_muestras": {"$sum": 1}
     }},
     {"$sort": {"_id": 1}}
 ]
 
-evolucion_result = list(collection.aggregate(agg_evolucion))
-df_evolucion = pd.DataFrame(evolucion_result)
-df_evolucion.to_csv(RESULTS_DIR + "/evolucion_muestras.csv", index=False)
+evolucion_horas_result = list(collection.aggregate(agg_evolucion))
+df_horas = pd.DataFrame(evolucion_horas_result)
+df_horas.columns = ['hour', 'num_muestras']
+df_horas['hour'] = pd.to_datetime(df_horas['hour'], format='%Y-%m-%d %H')
+df_horas = df_horas.sort_values('hour')
+
+df_horas.to_csv(RESULTS_DIR + "/evolucion_muestras.csv", index=False)
 # 
-for result in evolucion_result:
+for result in evolucion_horas_result:
     print(f"Fecha: {result['_id']}, Número de muestras: {result['num_muestras']}")
 
+# Visualización
+plt.figure(figsize=(10, 5))
+plt.plot(df_horas['hour'], df_horas['num_muestras'], marker='o')
+plt.xticks(rotation=45)
+plt.title("Evolución de muestras por hora")
+plt.xlabel("Hora")
+plt.ylabel("Número de muestras")
+plt.tight_layout()
+plt.savefig(RESULTS_DIR + "/evolucion_muestras_por_hora.png")
+plt.close()
+
+# ==== Análisis 9: Muestras cada minuto ====
+print("\nANALISIS 9: Muestras cada minuto")
+# Este análisis agrupa las muestras por minuto de envío y las ordena cronológicamente.
+agg_por_minuto = [
+    {"$match": {"submission.date": {"$exists": True}}},
+    {"$project": {
+        "sha256": 1,
+        "minuto_envio": "$submission.date"
+    }},
+    {"$sort": {"minuto_envio": 1}},
+    {"$group": {
+        "_id": "$minuto_envio",
+        "num_muestras": {"$sum": 1}
+    }},
+    # {"$limit": 40}  # Limitar a las primeras 20 muestras    
+
+]
+por_minuto_result = list(collection.aggregate(agg_por_minuto))  
+df_por_minuto = pd.DataFrame(por_minuto_result)
+df_por_minuto.columns = ['minute', 'num_samples']   
+df_por_minuto.to_csv(RESULTS_DIR + "/muestras_por_minuto.csv", index=False)
+print("\nFechas de 'submission.date' de todos los documentos:") 
+for result in por_minuto_result:
+    print(f"Minuto: {result['_id']}, Número de muestras: {result['num_muestras']}")
+
+# Guardar los resultados en un archivo CSV
+df_por_minuto.to_csv(RESULTS_DIR + "/muestras_por_minuto.csv", index=False)
+# Visualización de muestras por minuto
+plt.figure(figsize=(10, 5))
+plt.bar(df_por_minuto['minute'], df_por_minuto['num_samples'], color='skyblue')
+plt.xticks(rotation=45)
+plt.title("Número de muestras por minuto")
+plt.xlabel("Minuto")
+plt.ylabel("Número de muestras")
+plt.tight_layout()
+plt.savefig(RESULTS_DIR + "/muestras_por_minuto.png")
+
+
+
+# ==== Análisis 9: Muestras ordenadas por hora de envío ====
 
 
 print("\nANALISIS 9: Muestras ordenadas por hora de envío")
@@ -381,7 +470,8 @@ agg_por_hora = [
         "hora_envio": "$submission.date"  # Guarda la fecha/hora en un campo llamado 'hora_envio'
         }
     },
-    {"$sort": {"hora_envio": 1}}
+    {"$sort": {"hora_envio": 1}},
+    {"$limit": 20} 
 ]
 
 por_hora_result = list(collection.aggregate(agg_por_hora))
@@ -394,15 +484,10 @@ for result in por_hora_result:
     print(f"SHA256: {result['sha256']}, Hora de envío: {result['hora_envio']}")
 
     
-import folium
-import pycountry
-from geopy.geocoders import Nominatim
-from time import sleep
 
-# === Tu DataFrame 'df' ya debe contener:
-# 'country_code', 'country', 'count', 'avg_detection'
-
-# Diccionario aproximado de coordenadas por país (puedes ampliarlo si necesitas más)
+# ==== Análisis 10: Mapa de muestras con información adicional ====
+print("\nANALISIS 10: Mapa de muestras con información adicional")  
+# Diccionario aproximado de coordenadas por país
 coords_dict = {
     'Canada': (56.1304, -106.3468),
     'Germany': (51.1657, 10.4515),
@@ -414,7 +499,7 @@ coords_dict = {
     'Ecuador': (-1.8312, -78.1834),
     'Russian Federation': (61.5240, 105.3188),
     'Argentina': (-38.4161, -63.6167),
-    # Añade más si lo deseas
+
 }
 
 # Crear el mapa base
