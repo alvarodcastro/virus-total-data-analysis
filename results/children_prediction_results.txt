@@ -1,0 +1,12 @@
+Children Number Prediction Results
+==================================================
+
+Number of samples: 157
+Mean Absolute Error: 55.48
+R² Score: 0.7424
+
+
+Feature Importance:
+size: 0.7572
+zip_compressed_size: 0.2308
+zip_required_version: 0.0120

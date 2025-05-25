@@ -603,7 +603,6 @@ for result in por_hora_result:
     print(f"SHA256: {result['sha256']}, Hora de envío: {result['hora_envio']}")
 
     
-
 # ==== Análisis 10: Mapa de muestras con información adicional ====
 print("\nANALISIS 10: Mapa de muestras con información adicional")  
 # Diccionario aproximado de coordenadas por país
@@ -658,4 +657,4 @@ for idx, row in df.iterrows():
 # Guardar el resultado
 RESULTS_DIR = './results'
 world_map.save(RESULTS_DIR + "/mapa_muestras_con_info.html")
-print("✅ Mapa generado: mapa_muestras_con_info.html")
+print("Mapa generado: mapa_muestras_con_info.html")
