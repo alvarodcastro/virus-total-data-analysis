@@ -387,7 +387,6 @@ agg_relaciones_children = [
     {"$limit": 30}
 ]
 
-
 fase2_results = list(collection.aggregate(agg_relaciones_children))
 df_fase2 = pd.DataFrame(fase2_results)
 df_fase2.to_csv(RESULTS_DIR + "/children_compartidos.csv", index=False)
