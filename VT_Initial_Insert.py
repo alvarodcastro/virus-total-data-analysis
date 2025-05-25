@@ -45,6 +45,9 @@ for filename in os.listdir(directory):
             permalink = data[-1].get('permalink', None)
             submission = data[-1].get('submission', None)  # Store submission as JSON string
             last_seen = data[-1].get('last_seen', None)
+            size = data[-1].get('size', None)
+            exiftool = data[-1].get('additional_info', {}).get('exiftool', None)
+            num_children = data[-1].get('additional_info', {}).get('compressedview', {}).get('num_children', None)
             # Insert the row into MongoDB
             document = {
                 'vhash': vhash,
@@ -59,7 +62,10 @@ for filename in os.listdir(directory):
                 'positives': positives,
                 'permalink': permalink,
                 'submission': submission,
-                'last_seen': last_seen
+                'last_seen': last_seen,
+                'size': size,
+                'exiftool': exiftool,
+                'num_children': num_children
             }
         
             # Insert the document into MongoDB

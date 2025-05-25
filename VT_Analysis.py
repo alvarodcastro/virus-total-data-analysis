@@ -402,7 +402,7 @@ from time import sleep
 # === Tu DataFrame 'df' ya debe contener:
 # 'country_code', 'country', 'count', 'avg_detection'
 
-# Diccionario aproximado de coordenadas por país (puedes ampliarlo si necesitas más)
+# Diccionario aproximado de coordenadas por país
 coords_dict = {
     'Canada': (56.1304, -106.3468),
     'Germany': (51.1657, 10.4515),
@@ -454,4 +454,4 @@ for idx, row in df.iterrows():
 # Guardar el resultado
 RESULTS_DIR = './results'
 world_map.save(RESULTS_DIR + "/mapa_muestras_con_info.html")
-print("✅ Mapa generado: mapa_muestras_con_info.html")
+print("Mapa generado: mapa_muestras_con_info.html")
