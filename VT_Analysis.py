@@ -441,7 +441,7 @@ plt.axis('off')
 plt.legend()
 plt.tight_layout()
 plt.savefig(RESULTS_DIR + "/grafo_children_compartidos.png")
-plt.show()
+# plt.show()
 
 
 
