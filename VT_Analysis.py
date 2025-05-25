@@ -12,7 +12,7 @@ import pycountry
 import numpy as np
 from geopy.geocoders import Nominatim
 from time import sleep
-
+import networkx as nx
 
 # Load environment variables from a .env file
 load_dotenv()
@@ -113,6 +113,45 @@ plt.savefig(RESULTS_DIR + "/muestras_por_pais.png")
 
 # Guardar los resultados en un archivo CSV
 df.to_csv(RESULTS_DIR + "/muestras_por_pais.csv", index=False)
+
+
+# Datos
+countries = df['country']
+counts = df['count']
+avg_detection = df['avg_detection']
+
+fig, ax1 = plt.subplots(figsize=(14, 7))
+
+# Primer eje Y: barras
+bars = ax1.bar(countries, counts, color='skyblue', edgecolor='black', label='Number of Samples')
+ax1.set_ylabel('Number of Samples', fontsize=12)
+ax1.set_xlabel('Country', fontsize=12)
+ax1.tick_params(axis='y', labelcolor='black')
+ax1.set_facecolor('#f9f9f9')
+ax1.grid(axis='y', linestyle='--', alpha=0.6)
+
+# Añadir valores encima de cada barra
+for bar in bars:
+    height = bar.get_height()
+    ax1.annotate(f'{height}', 
+                 xy=(bar.get_x() + bar.get_width() / 2, height), 
+                 xytext=(0, 3), 
+                 textcoords='offset points', 
+                 ha='center', va='bottom', fontsize=9)
+
+# Segundo eje Y: línea de tasa de detección
+ax2 = ax1.twinx()
+ax2.plot(countries, avg_detection, color='orange', marker='o', linewidth=2, label='Avg. Detection Rate')
+ax2.set_ylabel('Avg. Detection Rate', fontsize=12, color='orange')
+ax2.tick_params(axis='y', labelcolor='orange')
+
+# Estética general
+plt.title('Malware Submissions and Detection Rate by Country', fontsize=16, weight='bold')
+plt.xticks(rotation=45, ha='right', fontsize=10)
+fig.tight_layout()
+plt.savefig(RESULTS_DIR + "/muestras_por_pais_con_tasa.png", dpi=300)
+
+
 
 results = list(collection.aggregate(agg_pais_detection))
 df2 = pd.DataFrame(results)
@@ -358,6 +397,55 @@ for result in fase2_results:
     short_muestras = [m[:10] + "..." for m in result['muestras_relacionadas']]
     print(f"SHA256 child: {short_sha}, Número de muestras relacionadas: {result['num_muestras']}")#, Muestras relacionadas: {short_muestras}")
 
+
+# Filtrar los hijos compartidos más frecuentes (por ejemplo, los top 15)
+top_shared = sorted(fase2_results, key=lambda x: x['num_muestras'], reverse=True)[:5]
+
+# Crear grafo
+G = nx.Graph()
+
+# Añadir nodos y relaciones
+for entry in top_shared:
+    child = entry['_id'][:10] + '...'  # acortado
+    for parent in entry['muestras_relacionadas']:
+        parent_short = parent[:10] + '...'
+        G.add_node(parent_short, bipartite=0)
+        G.add_node(child, bipartite=1)
+        G.add_edge(parent_short, child)
+
+# Separar nodos por tipo
+parent_nodes = {n for n, d in G.nodes(data=True) if d['bipartite'] == 0}
+child_nodes = set(G) - parent_nodes
+
+
+# Posicionamiento bipartito
+pos = nx.spring_layout(G, k=0.5, iterations=100)
+
+# Etiquetas
+labels = {n: n for n in child_nodes}
+nx.draw_networkx_labels(G, pos, labels, font_size=8)
+
+
+# Dibujar nodos
+plt.figure(figsize=(12, 8))
+nx.draw_networkx_nodes(G, pos, nodelist=parent_nodes, node_color='skyblue', label='Parent Samples')
+nx.draw_networkx_nodes(G, pos, nodelist=child_nodes, node_color='lightcoral', label='Shared Children')
+
+# Dibujar aristas
+nx.draw_networkx_edges(G, pos, alpha=0.5)
+
+# Etiquetas (opcional)
+# nx.draw_networkx_labels(G, pos, font_size=6)
+
+plt.title('Shared Children Between Malware Samples')
+plt.axis('off')
+plt.legend()
+plt.tight_layout()
+plt.savefig(RESULTS_DIR + "/grafo_children_compartidos.png")
+plt.show()
+
+
+
 # ==== Análisis 7: Distribución de TAGS ====
 print("\nANALISIS 7: Distribución de TAGS")
 # Este análisis calcula la cantidad de muestras por cada tag y la detección media asociada a cada uno.
@@ -379,22 +467,51 @@ df_tags.to_csv(RESULTS_DIR + "/analisis_tags.csv", index=False)
 for result in tags_result:
     print(f"TAG: {result['_id']:<20}, Número de muestras: {result['num_muestras']:<20}, Detección media: {result['deteccion_media']}")
 
+# Ordenar por número de muestras
+df_tags = df_tags.sort_values(by='num_muestras', ascending=False)
+
+# Crear figura y eje primario
+fig, ax1 = plt.subplots(figsize=(14, 6))
+
+# Barra: número de muestras
+bars = ax1.bar(df_tags['_id'], df_tags['num_muestras'], color='skyblue', label='Sample Count')
+ax1.set_xlabel('Tags')
+ax1.set_ylabel('Number of Samples', color='skyblue')
+ax1.tick_params(axis='y', labelcolor='skyblue')
+ax1.set_xticks(range(len(df_tags['_id'])))
+ax1.set_xticklabels(df_tags['_id'], rotation=45, ha='right')
+
+# Línea: detección media
+ax2 = ax1.twinx()
+ax2.plot(df_tags['_id'], df_tags['deteccion_media'], color='crimson', marker='o', label='Avg. Detection Rate')
+ax2.set_ylabel('Average Detection Rate', color='crimson')
+ax2.tick_params(axis='y', labelcolor='crimson')
+ax2.set_ylim(0, 1)  # ya que la detección es una proporción entre 0 y 1
+
+# Título y leyenda
+plt.title('Sample Count and Average Detection Rate per Tag')
+fig.tight_layout()
+
+# Guardar figura
+plt.savefig(RESULTS_DIR + "/analisis_tags_barchart.png")
+#plt.show()
+
+
 # ==== Análisis 8: Evolución temporal de muestras ====
 print("\nANALISIS 8: Evolución temporal de muestras")
 # Este análisis calcula la evolución temporal de las muestras, agrupando por fecha de envío y contando el número de muestras por día.
 agg_evolucion = [
     {"$match": {"submission.date": {"$exists": True}}},
-
     {"$project": {
         "hora": {
-                "$substr": ["$submission.date", 0, 13]  # Extrae 'YYYY-MM-DD'
+            "$substr": ["$submission.date", 0, 13]  # Extrae 'YYYY-MM-DD HH'
         }
     }},
     {"$group": {
         "_id": "$hora",
         "num_muestras": {"$sum": 1}
     }},
-    {"$sort": {"_id": 1}}
+    {"$sort": {"_id": 1}}  # Ordena por la hora ascendente
 ]
 
 evolucion_horas_result = list(collection.aggregate(agg_evolucion))
@@ -419,6 +536,7 @@ plt.tight_layout()
 plt.savefig(RESULTS_DIR + "/evolucion_muestras_por_hora.png")
 plt.close()
 
+
 # ==== Análisis 9: Muestras cada minuto ====
 print("\nANALISIS 9: Muestras cada minuto")
 # Este análisis agrupa las muestras por minuto de envío y las ordena cronológicamente.
@@ -440,16 +558,19 @@ por_minuto_result = list(collection.aggregate(agg_por_minuto))
 df_por_minuto = pd.DataFrame(por_minuto_result)
 df_por_minuto.columns = ['minute', 'num_samples']   
 df_por_minuto.to_csv(RESULTS_DIR + "/muestras_por_minuto.csv", index=False)
+
 print("\nFechas de 'submission.date' de todos los documentos:") 
 for result in por_minuto_result:
     print(f"Minuto: {result['_id']}, Número de muestras: {result['num_muestras']}")
 
+
 # Guardar los resultados en un archivo CSV
 df_por_minuto.to_csv(RESULTS_DIR + "/muestras_por_minuto.csv", index=False)
+
 # Visualización de muestras por minuto
 plt.figure(figsize=(10, 5))
 plt.bar(df_por_minuto['minute'], df_por_minuto['num_samples'], color='skyblue')
-plt.xticks(rotation=45)
+plt.xticks([])
 plt.title("Número de muestras por minuto")
 plt.xlabel("Minuto")
 plt.ylabel("Número de muestras")
@@ -459,7 +580,6 @@ plt.savefig(RESULTS_DIR + "/muestras_por_minuto.png")
 
 
 # ==== Análisis 9: Muestras ordenadas por hora de envío ====
-
 
 print("\nANALISIS 9: Muestras ordenadas por hora de envío")
 # Este análisis agrupa las muestras por hora de envío y las ordena cronológicamente.
