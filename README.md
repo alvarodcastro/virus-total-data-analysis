@@ -1,15 +1,24 @@
 # VirusTotal Android Malware Analysis
 
 ## Project Overview
-This project implements a comprehensive analysis system for Android malware samples using VirusTotal data. It processes and analyzes JSON reports from VirusTotal's API, providing multiple analytical perspectives on malware behavior, detection patterns, and relationships.
+This project implements a comprehensive analysis system for Android malware samples using VirusTotal data. It processes and analyzes JSON reports from VirusTotal's API, providing multiple analytical perspectives on malware behavior, detection patterns, and relationships. The analysis results are presented through an interactive web interface that showcases various visualizations and allows access to the raw data.
+
+### Website Interface
+All analysis results are available through an interactive website (`index.html`) that provides:
+- Interactive geographic visualizations of malware distribution
+- Comprehensive statistical analysis results
+- Downloadable raw data in CSV format
+- Network relationship visualizations
+- Temporal analysis charts
 
 ## Project Structure
 ```
-├── VT_Initial_Insert.py    # Initial data ingestion into MongoDB
-├── VT_Analysis.py          # Main analysis and visualization scripts
-├── VT_modelling.py         # Machine learning models (PCA and prediction)
-├── requirements.txt        # Project dependencies
-└── results/               # Generated analysis outputs
+├── index.html             # Interactive web interface for viewing results
+├── VT_Initial_Insert.py   # Initial data ingestion into MongoDB
+├── VT_Analysis.py         # Main analysis and visualization scripts
+├── VT_modelling.py        # Machine learning models (PCA and prediction)
+├── requirements.txt       # Project dependencies
+└── results/              # Generated analysis outputs and visualizations
 ```
 
 ## Features
@@ -90,7 +99,12 @@ The `results/` directory contains various analysis outputs:
 ## Installation and Usage
 
 1. Clone the repository
-2. Install dependencies:
+2. To view the analysis results:
+   - Open `index.html` in a web browser to explore the interactive visualizations and download data
+   - All visualizations and data files are available in the `results/` directory
+
+3. To run the analysis pipeline:
+   Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
