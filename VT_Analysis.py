@@ -103,9 +103,9 @@ print("Mapa guardado en: mapa_muestras_por_pais.html")
 # 4. Crear gráfico de barras
 plt.figure(figsize=(12, 6))
 plt.bar(df['country'], df['count'], color='skyblue')
-plt.xlabel('País')
-plt.ylabel('Número de muestras')
-plt.title('Número de muestras por país')
+plt.xlabel('Country')
+plt.ylabel('Number of samples')
+plt.title('Number of samples by country')
 plt.xticks(rotation=45)
 plt.tight_layout()
 plt.savefig(RESULTS_DIR + "/muestras_por_pais.png")
@@ -177,7 +177,7 @@ df_pie = pd.concat([df_top, otros], ignore_index=True)
 # Crear gráfico de tarta
 plt.figure(figsize=(8, 8))
 plt.pie(df_pie['percentage'], labels=df_pie['country'], autopct='%1.1f%%', startangle=140)
-plt.title('Distribución porcentual de muestras por país')
+plt.title('Percentage distribution of samples by country')
 plt.tight_layout()
 plt.savefig(RESULTS_DIR + "/muestras_por_pais_piechart.png")
 plt.close()
@@ -522,9 +522,9 @@ for result in evolucion_horas_result:
 plt.figure(figsize=(10, 5))
 plt.plot(df_horas['hour'], df_horas['num_muestras'], marker='o')
 plt.xticks(rotation=45)
-plt.title("Evolución de muestras por hora")
-plt.xlabel("Hora")
-plt.ylabel("Número de muestras")
+plt.title("Sample evolution by hour")
+plt.xlabel("Hour")
+plt.ylabel("Number of samples")
 plt.tight_layout()
 plt.savefig(RESULTS_DIR + "/evolucion_muestras_por_hora.png")
 plt.close()
@@ -564,9 +564,9 @@ df_por_minuto.to_csv(RESULTS_DIR + "/muestras_por_minuto.csv", index=False)
 plt.figure(figsize=(10, 5))
 plt.bar(df_por_minuto['minute'], df_por_minuto['num_samples'], color='skyblue')
 plt.xticks([])
-plt.title("Número de muestras por minuto")
-plt.xlabel("Minuto")
-plt.ylabel("Número de muestras")
+plt.title("Number of samples per minute")
+plt.xlabel("Minute")
+plt.ylabel("Number of samples")
 plt.tight_layout()
 plt.savefig(RESULTS_DIR + "/muestras_por_minuto.png")
 
@@ -620,14 +620,14 @@ world_map = folium.Map(location=[20, 0], zoom_start=2)
 # Choropleth coloreado por detección media
 choropleth = folium.Choropleth(
     geo_data='https://raw.githubusercontent.com/python-visualization/folium/main/examples/data/world-countries.json',
-    name='Detección media por país',
+    name='Mean detection by country',
     data=df,
     columns=['country', 'avg_detection'],
     key_on='feature.properties.name',
     fill_color='YlGnBu',
     fill_opacity=0.7,
     line_opacity=0.2,
-    legend_name='Detección media',
+    legend_name='Mean Detection',
 ).add_to(world_map)
 
 # Añadir etiquetas en cada país
@@ -643,7 +643,7 @@ for idx, row in df.iterrows():
             fill_color='blue',
             fill_opacity=0.6,
             popup=folium.Popup(
-                f"<b>{country}</b><br>Muestras: {row['count']}<br>Media detección: {round(row['avg_detection'], 2)}",
+                f"<b>{country}</b><br>Samples: {row['count']}<br>Detection mean: {round(row['avg_detection'], 2)}",
                 max_width=200
             )
         ).add_to(world_map)
