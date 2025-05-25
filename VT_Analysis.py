@@ -418,23 +418,18 @@ child_nodes = set(G) - parent_nodes
 
 
 # Posicionamiento bipartito
-pos = nx.spring_layout(G, k=0.5, iterations=100)
+pos = nx.spring_layout(G, k=1.5, iterations=100)
 
-# Etiquetas
-labels = {n: n for n in child_nodes}
-nx.draw_networkx_labels(G, pos, labels, font_size=8)
-
-
-# Dibujar nodos
-plt.figure(figsize=(12, 8))
+plt.figure(figsize=(14, 9))
 nx.draw_networkx_nodes(G, pos, nodelist=parent_nodes, node_color='skyblue', label='Parent Samples')
 nx.draw_networkx_nodes(G, pos, nodelist=child_nodes, node_color='lightcoral', label='Shared Children')
-
-# Dibujar aristas
 nx.draw_networkx_edges(G, pos, alpha=0.5)
 
-# Etiquetas (opcional)
-# nx.draw_networkx_labels(G, pos, font_size=6)
+# Etiquetas: padres en negro, hijos en blanco
+parent_labels = {n: n for n in parent_nodes}
+child_labels = {n: n for n in child_nodes}
+nx.draw_networkx_labels(G, pos, labels=parent_labels, font_size=8, font_color='black')
+nx.draw_networkx_labels(G, pos, labels=child_labels, font_size=8, font_color='white')
 
 plt.title('Shared Children Between Malware Samples')
 plt.axis('off')
@@ -442,7 +437,6 @@ plt.legend()
 plt.tight_layout()
 plt.savefig(RESULTS_DIR + "/grafo_children_compartidos.png")
 # plt.show()
-
 
 
 # ==== Análisis 7: Distribución de TAGS ====
